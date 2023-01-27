@@ -70,7 +70,7 @@ func (r *runResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			},
 			"command": schema.StringAttribute{
 				Description: "Command to run",
-				Required:    true,
+				Optional:    true,
 			},
 			"max_wait_time": schema.Int64Attribute{
 				Description: "Max time to wait (default = 5 minutes)",
@@ -100,7 +100,8 @@ func (r *runResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	diags = r.runTask(ctx, &plan)
-	if diags.HasError() {
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -141,7 +142,8 @@ func (r *runResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	}
 
 	diags = r.runTask(ctx, &plan)
-	if diags.HasError() {
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -172,20 +174,25 @@ func (r *runResource) ImportState(ctx context.Context, req resource.ImportStateR
 func (r *runResource) runTask(ctx context.Context, plan *runResourceModel) diag.Diagnostics {
 	diags := diag.Diagnostics{}
 
-	output, err := r.client.RunTask(ctx, &ecs.RunTaskInput{
+	input := &ecs.RunTaskInput{
 		TaskDefinition: aws.String(plan.TaskDefinition.ValueString()),
 		Cluster:        aws.String(plan.ClusterARN.ValueString()),
-		Overrides: &ecs_types.TaskOverride{
+		StartedBy:      aws.String("taskrunner-aws-ecs"),
+		Count:          aws.Int32(1),
+	}
+
+	if plan.Command.ValueString() != "" {
+		input.Overrides = &ecs_types.TaskOverride{
 			ContainerOverrides: []ecs_types.ContainerOverride{
 				{
 					Name:    aws.String(plan.Container.ValueString()),
 					Command: plan.commandList(),
 				},
 			},
-		},
-		StartedBy: aws.String("taskrunner-aws-ecs"),
-		Count:     aws.Int32(1),
-	})
+		}
+	}
+
+	output, err := r.client.RunTask(ctx, input)
 	if err != nil {
 		diags.AddError("failed to run task", err.Error())
 		return diags
