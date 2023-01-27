@@ -42,7 +42,7 @@ func (p *taskRunnerProvider) Schema(_ context.Context, _ provider.SchemaRequest,
 	}
 }
 
-// Configure prepares a HashiCups API client for data sources and resources.
+// Configure prepares a ECS API client for data sources and resources.
 func (p *taskRunnerProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	tflog.Info(ctx, "Configuring AWS ECS client")
 
@@ -74,8 +74,6 @@ func (p *taskRunnerProvider) Configure(ctx context.Context, req provider.Configu
 	}
 	client := ecs.NewFromConfig(cfg)
 
-	// Make the HashiCups client available during DataSource and Resource
-	// type Configure methods.
 	resp.DataSourceData = client
 	resp.ResourceData = client
 

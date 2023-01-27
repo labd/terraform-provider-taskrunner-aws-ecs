@@ -3,15 +3,14 @@ package internal
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecs_types "github.com/aws/aws-sdk-go-v2/service/ecs/types"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/elliotchance/pie/v2"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -36,12 +35,11 @@ type runResource struct {
 }
 
 type runResourceModel struct {
-	TaskDefinition     types.String `tfsdk:"task_definition"`
-	ClusterARN         types.String `tfsdk:"ecs_cluster_arn"`
-	Command            types.String `tfsdk:"command"`
-	Container          types.String `tfsdk:"container"`
-	MaxWaitTime        types.Int64  `tfsdk:"max_wait_time"`
-	WaitUntilCompleted types.Bool   `tfsdk:"wait_until_completed"`
+	TaskDefinition types.String `tfsdk:"task_definition"`
+	ClusterARN     types.String `tfsdk:"ecs_cluster_arn"`
+	Command        types.String `tfsdk:"command"`
+	Container      types.String `tfsdk:"container"`
+	MaxWaitTime    types.Int64  `tfsdk:"max_wait_time"`
 }
 
 func (r *runResourceModel) commandList() []string {
@@ -78,10 +76,6 @@ func (r *runResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				Description: "Max time to wait (default = 5 minutes)",
 				Optional:    true,
 			},
-			"wait_until_completed": schema.BoolAttribute{
-				Description: "Password for HashiCups API. May also be provided via HASHICUPS_PASSWORD environment variable.",
-				Optional:    true,
-			},
 		},
 	}
 }
@@ -102,6 +96,11 @@ func (r *runResource) Create(ctx context.Context, req resource.CreateRequest, re
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	diags = r.runTask(ctx, &plan)
+	if diags.HasError() {
 		return
 	}
 
@@ -141,53 +140,11 @@ func (r *runResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	log.Println(spew.Sdump(plan))
-
-	output, err := r.client.RunTask(ctx, &ecs.RunTaskInput{
-		TaskDefinition: aws.String(plan.TaskDefinition.ValueString()),
-		Cluster:        aws.String(plan.ClusterARN.ValueString()),
-		Overrides: &ecs_types.TaskOverride{
-			ContainerOverrides: []ecs_types.ContainerOverride{
-				{
-					Name:    aws.String(plan.Container.ValueString()),
-					Command: plan.commandList(),
-				},
-			},
-		},
-		StartedBy: aws.String("taskrunner-aws-ecs"),
-		Count:     aws.Int32(1),
-	})
-	if err != nil {
-		resp.Diagnostics.AddError("failed to run task", err.Error())
+	diags = r.runTask(ctx, &plan)
+	if diags.HasError() {
 		return
 	}
 
-	waiter := ecs.NewTasksRunningWaiter(r.client)
-
-	params := &ecs.DescribeTasksInput{
-		Cluster: aws.String(plan.ClusterARN.ValueString()),
-		Tasks: pie.Map(output.Tasks, func(t ecs_types.Task) string {
-			return *t.TaskArn
-		}),
-	}
-
-	log.Printf("Waiting for tasks: %v\n", params.Tasks)
-
-	if plan.MaxWaitTime.IsUnknown() {
-		plan.MaxWaitTime = types.Int64Value(300)
-	}
-	waitTime := time.Duration(plan.MaxWaitTime.ValueInt64()) * time.Second
-	err = waiter.Wait(ctx, params, waitTime, func(t *ecs.TasksRunningWaiterOptions) {
-		t.MaxDelay = 15 * time.Second
-		t.Retryable = taskWaiter(plan.Container.ValueString())
-	})
-	if err != nil {
-		resp.Diagnostics.AddError(
-			fmt.Sprintf("failed to wait for task %s", params.Tasks[0]), err.Error())
-		return
-	}
-
-	// ecs.RunTaskInput{}
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -210,4 +167,52 @@ func (r *runResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 func (r *runResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	// Retrieve import ID and save to id attribute
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (r *runResource) runTask(ctx context.Context, plan *runResourceModel) diag.Diagnostics {
+	diags := diag.Diagnostics{}
+
+	output, err := r.client.RunTask(ctx, &ecs.RunTaskInput{
+		TaskDefinition: aws.String(plan.TaskDefinition.ValueString()),
+		Cluster:        aws.String(plan.ClusterARN.ValueString()),
+		Overrides: &ecs_types.TaskOverride{
+			ContainerOverrides: []ecs_types.ContainerOverride{
+				{
+					Name:    aws.String(plan.Container.ValueString()),
+					Command: plan.commandList(),
+				},
+			},
+		},
+		StartedBy: aws.String("taskrunner-aws-ecs"),
+		Count:     aws.Int32(1),
+	})
+	if err != nil {
+		diags.AddError("failed to run task", err.Error())
+		return diags
+	}
+
+	waiter := ecs.NewTasksRunningWaiter(r.client)
+
+	params := &ecs.DescribeTasksInput{
+		Cluster: aws.String(plan.ClusterARN.ValueString()),
+		Tasks: pie.Map(output.Tasks, func(t ecs_types.Task) string {
+			return *t.TaskArn
+		}),
+	}
+
+	if plan.MaxWaitTime.IsUnknown() {
+		plan.MaxWaitTime = types.Int64Value(300)
+	}
+	waitTime := time.Duration(plan.MaxWaitTime.ValueInt64()) * time.Second
+	err = waiter.Wait(ctx, params, waitTime, func(t *ecs.TasksRunningWaiterOptions) {
+		t.MaxDelay = 15 * time.Second
+		t.Retryable = taskWaiter(plan.Container.ValueString())
+	})
+	if err != nil {
+		diags.AddError(
+			fmt.Sprintf("failed to wait for task %s", params.Tasks[0]), err.Error())
+		return diags
+	}
+
+	return diags
 }
