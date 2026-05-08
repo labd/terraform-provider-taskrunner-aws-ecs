@@ -13,20 +13,22 @@ jobs:
         go-version: [1.19]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+      with:
+        persist-credentials: false
 
-    - uses: hashicorp/setup-terraform@v2
+    - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2.0.3
       with:
         terraform_version: 1.3.7
         terraform_wrapper: false
 
     - name: Set up Go ${{ matrix.go-version }}
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@be3c94b385c4f180051c996d336f57a34c397495 # v3.6.1
       with:
         go-version: ${{ matrix.go-version }}
 
     - name: golangci-lint
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
       with:
         args: --issues-exit-code=0 --timeout=5m
 
@@ -34,6 +36,6 @@ jobs:
       run: go test -race -coverprofile=coverage.out -covermode=atomic -coverpkg=./... -v ./...
 
     - name: Upload to codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3.1.6
       with:
         verbose: true
