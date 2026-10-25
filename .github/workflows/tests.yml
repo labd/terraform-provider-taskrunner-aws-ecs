@@ -33,9 +33,4 @@ jobs:
         args: --issues-exit-code=0 --timeout=5m
 
     - name: Run tests
-      run: go test -race -coverprofile=coverage.out -covermode=atomic -coverpkg=./... -v ./...
-
-    - name: Upload to codecov
-      uses: codecov/codecov-action@ab904c41d6ece82784817410c45d8b8c02684457 # v3.1.6
-      with:
-        verbose: true
+      run: go test -race -v ./...
