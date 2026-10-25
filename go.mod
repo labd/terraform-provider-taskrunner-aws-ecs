@@ -1,6 +1,6 @@
 module github.com/labd/terraform-provider-aws-ecs-taskrunner
 
-go 1.25.0
+go 1.27
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.17.3
