@@ -15,7 +15,6 @@ import (
 // value of true and nil error, while in case of success it returns a bool value
 // of false and nil error.
 func taskWaiter(containerName string) func(ctx context.Context, input *ecs.DescribeTasksInput, output *ecs.DescribeTasksOutput, err error) (bool, error) {
-
 	return func(ctx context.Context, input *ecs.DescribeTasksInput, output *ecs.DescribeTasksOutput, err error) (bool, error) {
 		if len(output.Tasks) == 1 {
 			task := output.Tasks[0]
@@ -30,7 +29,7 @@ func taskWaiter(containerName string) func(ctx context.Context, input *ecs.Descr
 
 			if *task.LastStatus == "STOPPED" {
 				if task.StopCode != types.TaskStopCodeEssentialContainerExited {
-					return false, fmt.Errorf("Task failed: %s", task.StopCode)
+					return false, fmt.Errorf("task failed: %s", task.StopCode)
 				}
 
 				// Check exit code from the container

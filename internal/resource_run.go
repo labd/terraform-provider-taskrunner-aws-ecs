@@ -81,12 +81,20 @@ func (r *runResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 }
 
 // Configure adds the provider configured client to the data source.
-func (r *runResource) Configure(_ context.Context, req resource.ConfigureRequest, _ *resource.ConfigureResponse) {
+func (r *runResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
 
-	r.client = req.ProviderData.(*ecs.Client)
+	client, ok := req.ProviderData.(*ecs.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *ecs.Client, got: %T.", req.ProviderData),
+		)
+		return
+	}
+	r.client = client
 }
 
 // Create creates the resource and sets the initial Terraform state.
@@ -163,7 +171,6 @@ func (r *runResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
 }
 
 func (r *runResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
