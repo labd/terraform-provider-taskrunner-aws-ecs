@@ -20,6 +20,10 @@ jobs:
           app-id: ${{ secrets.RD_APP_ID }}
           private-key: ${{ secrets.RD_APP_PRIVATE_KEY }}
           owner: labd
+          repositories: ${{ github.event.repository.name }}
+          permission-organization-projects: write
+          permission-issues: read
+          permission-pull-requests: read
       - name: set to project board
         uses: actions/add-to-project@31b3f3ccdc584546fc445612dec3f38ff5edb41c # v0.5.0
         with:
