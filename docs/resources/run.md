@@ -17,13 +17,11 @@ Run a task until completed
 
 ### Required
 
-- `command` (String) Command to run
 - `container` (String) Container to run command in
 - `ecs_cluster_arn` (String) ECS Cluster to run the task on
 - `task_definition` (String) The task definition (family:revision)
 
 ### Optional
 
+- `command` (String) Command to run
 - `max_wait_time` (Number) Max time to wait (default = 5 minutes)
-
-
