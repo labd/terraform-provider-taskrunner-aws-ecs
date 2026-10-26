@@ -1,31 +1,27 @@
 name: Run Tests
 
-on: [push]
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
 
 jobs:
 
   test:
     runs-on: ubuntu-latest
 
-    strategy:
-      max-parallel: 4
-      matrix:
-        go-version: ["1.27", "stable"]
-
     steps:
-    - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
 
-    - uses: hashicorp/setup-terraform@633666f66e0061ca3b725c73b2ec20cd13a8fdd1 # v2.0.3
-      with:
-        terraform_version: 1.3.7
-        terraform_wrapper: false
-
-    - name: Set up Go ${{ matrix.go-version }}
+    - name: Set up Go
       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version-file: go.mod
 
     - name: golangci-lint
       uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -35,3 +31,22 @@ jobs:
 
     - name: Run tests
       run: go test -race -v ./...
+
+    - name: Check generated docs
+      run: |
+        go generate ./...
+        git diff --compact-summary --exit-code docs
+
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: false
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
